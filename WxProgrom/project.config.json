@@ -1,0 +1,13 @@
+{
+  "appid": "wxbfb4d52bf5e4dd6f",
+  "projectname": "pool2",
+  "compileType": "game",
+  "libVersion": "latest",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "postcss": true,
+    "minified": false,
+    "newFeature": true
+  }
+}
