@@ -6817,15 +6817,7 @@ var Layout = /** @class */ (function (_super) {
         /**
          * 画布尺寸和实际被渲染到屏幕的物理尺寸比
          */
-        //_this.viewportScale = 1;
-
-/**
- * 画布尺寸和实际被渲染到屏幕的物理尺寸比
- * 需要区分 X / Y，避免非等比显示时命中区域偏移
- */
-_this.viewportScaleX = 1;
-_this.viewportScaleY = 1;
-
+        _this.viewportScale = 1;
         /**
          * 用于标识updateViewPort方法是否被调用过了，这在小游戏环境非常重要
          */
@@ -6959,15 +6951,6 @@ _this.viewportScaleY = 1;
             realY: this.viewport.y,
         };
         this.hasViewPortSet = true;
-
-        try {
-          console.log("[Layout][updateViewPort]", JSON.stringify({
-              viewport: this.viewport,
-              realLayoutBox: this.realLayoutBox
-          }));
-      } catch (err) {
-          console.log("[Layout][updateViewPort]", this.viewport);
-      }
     };
     Layout.prototype.init = function (template, style, attrValueProcessor) {
         debugInfo.start('init');
@@ -7004,27 +6987,7 @@ _this.viewportScaleY = 1;
         debugInfo.start('layoutChildren', true);
         (0,_common_vd__WEBPACK_IMPORTED_MODULE_10__.layoutChildren)(this);
         debugInfo.end('layoutChildren');
-        //this.viewportScale = this.viewport.width / this.renderport.width;
-
-        this.viewportScaleX = this.renderport.width
-        ? this.viewport.width / this.renderport.width
-        : 1;
-    this.viewportScaleY = this.renderport.height
-        ? this.viewport.height / this.renderport.height
-        : 1;
-
-        try {
-          console.log("[Layout][reflow]", JSON.stringify({
-              renderport: this.renderport,
-              viewport: this.viewport,
-              viewportScaleX: this.viewportScaleX,
-              viewportScaleY: this.viewportScaleY
-          }));
-      } catch (err) {
-          console.log("[Layout][reflow]", this.renderport, this.viewport);
-      }
-
-
+        this.viewportScale = this.viewport.width / this.renderport.width;
         (0,_common_util__WEBPACK_IMPORTED_MODULE_5__.clearCanvas)(this.renderContext);
         // 遍历节点树，依次调用节点的渲染接口实现渲染
         debugInfo.start('renderChildren', true);
@@ -7083,34 +7046,34 @@ _this.viewportScaleY = 1;
      * 返回一个节点在屏幕中的位置和尺寸信息，前提是正确调用updateViewPort。
      */
     Layout.prototype.getElementViewportRect = function (element) {
-      var _a = this, realLayoutBox = _a.realLayoutBox, viewportScaleX = _a.viewportScaleX, viewportScaleY = _a.viewportScaleY;
-      var _b = element.layoutBox, absoluteX = _b.absoluteX, absoluteY = _b.absoluteY, width = _b.width, height = _b.height;
-      var realX = absoluteX * viewportScaleX + realLayoutBox.realX;
-      var realY = absoluteY * viewportScaleY + realLayoutBox.realY;
-      var realWidth = width * viewportScaleX;
-      var realHeight = height * viewportScaleY;
-      return new _common_rect__WEBPACK_IMPORTED_MODULE_11__["default"](realX, realY, realWidth, realHeight);
-  };
-  Layout.prototype.getChildByPos = function (tree, x, y, itemList) {
-    var _this = this;
-    tree.children.forEach(function (ele) {
-        var _a = ele.layoutBox, absoluteX = _a.absoluteX, absoluteY = _a.absoluteY, width = _a.width, height = _a.height;
-        var realX = absoluteX * _this.viewportScaleX + _this.realLayoutBox.realX;
-        var realY = absoluteY * _this.viewportScaleY + _this.realLayoutBox.realY;
-        var realWidth = width * _this.viewportScaleX;
-        var realHeight = height * _this.viewportScaleY;
-        if ((realX <= x && x <= realX + realWidth) && (realY <= y && y <= realY + realHeight)) {
-            /**
-             * 相关issue：https://github.com/wechat-miniprogram/minigame-canvas-engine/issues/17
-             * 这里只要满足条件的都要记录，否则可能出现 issue 里面提到的问题
-             */
-            itemList.push(ele);
-            if (ele.children.length) {
-                _this.getChildByPos(ele, x, y, itemList);
+        var _a = this, realLayoutBox = _a.realLayoutBox, viewportScale = _a.viewportScale;
+        var _b = element.layoutBox, absoluteX = _b.absoluteX, absoluteY = _b.absoluteY, width = _b.width, height = _b.height;
+        var realX = absoluteX * viewportScale + realLayoutBox.realX;
+        var realY = absoluteY * viewportScale + realLayoutBox.realY;
+        var realWidth = width * viewportScale;
+        var realHeight = height * viewportScale;
+        return new _common_rect__WEBPACK_IMPORTED_MODULE_11__["default"](realX, realY, realWidth, realHeight);
+    };
+    Layout.prototype.getChildByPos = function (tree, x, y, itemList) {
+        var _this = this;
+        tree.children.forEach(function (ele) {
+            var _a = ele.layoutBox, absoluteX = _a.absoluteX, absoluteY = _a.absoluteY, width = _a.width, height = _a.height;
+            var realX = absoluteX * _this.viewportScale + _this.realLayoutBox.realX;
+            var realY = absoluteY * _this.viewportScale + _this.realLayoutBox.realY;
+            var realWidth = width * _this.viewportScale;
+            var realHeight = height * _this.viewportScale;
+            if ((realX <= x && x <= realX + realWidth) && (realY <= y && y <= realY + realHeight)) {
+                /**
+                 * 相关issue：https://github.com/wechat-miniprogram/minigame-canvas-engine/issues/17
+                 * 这里只要满足条件的都要记录，否则可能出现 issue 里面提到的问题
+                 */
+                itemList.push(ele);
+                if (ele.children.length) {
+                    _this.getChildByPos(ele, x, y, itemList);
+                }
             }
-        }
-    });
-};
+        });
+    };
     /**
      * 执行全局的事件绑定逻辑
      */
