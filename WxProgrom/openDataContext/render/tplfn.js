@@ -14,19 +14,28 @@ function escAttr(value) {
 module.exports = function tplFn(it) {
   it = it || {};
   var data = Array.isArray(it.data) ? it.data : [];
+  var images = it.images || {};
   var emptyText = it.emptyText || "暂无可邀请的微信好友";
+  var avatarFallback =
+    images["icon_800000.png"] || "openDataContext/image/icon_800000.png";
+  var btnImg =
+    images["ui_btn_yellow.png"] || "openDataContext/image/ui_btn_yellow.png";
+  var lineImg =
+    images["ui_lt_dgx.png"] || "openDataContext/image/ui_lt_dgx.png";
   var out = '<view id="container" class="container">';
 
   if (data.length === 0) {
     out +=
       '<text class="emptyText" value="' + escAttr(emptyText) + '"></text>';
   } else {
-    out += '<scrollview id="list_items" class="list_items">';
+    out += '<scrollview id="list_items" class="list_items" scrollY="true">';
     for (var i = 0; i < data.length; i++) {
       var row = data[i] || {};
       var openid = escAttr(row.openid);
-      var nickname = escAttr(row.nickname || "微信好友");
-      var avatar = escAttr(row.avatarUrl || "image/icon_800000.png");
+      var nickname = escAttr(
+        row.nickName || row.nickname || "微信好友"
+      );
+      var avatar = escAttr(row.avatarUrl || avatarFallback);
       out +=
         '<view class="item" id="item_' +
         i +
@@ -36,10 +45,14 @@ module.exports = function tplFn(it) {
       out += '<image class="img_head" src="' + avatar + '"></image>';
       out += '<text class="txt_nick" value="' + nickname + '"></text>';
       out +=
-        '<image class="btn_invite" src="image/ui_btn_yellow.png"></image>';
+        '<image id="btn_' +
+        i +
+        '" class="btn_invite" src="' +
+        escAttr(btnImg) +
+        '">';
       out += '<text class="txt_title" value="邀请"></text>';
-      out +=
-        '<image class="img_line" src="image/ui_lt_dgx.png"></image>';
+      out += "</image>";
+      out += '<image class="img_line" src="' + escAttr(lineImg) + '"></image>';
       out += "</view>";
     }
     out += "</scrollview>";

@@ -6,9 +6,9 @@
 ## 改 UI 的流程
 
 ```
-1. IDE 编辑 assets/prefab/UISocialInviteView.lh
+1. IDE 编辑 assets/prefab/UIGameRoomView.lh
         ↓
-2. sync-prefab-layout.ps1   ← 同步 prefab → Layout style/tplfn
+2. prefab-to-style.js       ← 同步 prefab → render/style.js
         ↓
 3. deploy-to-main.ps1       ← 无需 Laya IDE 构建
         ↓
@@ -19,7 +19,7 @@
 
 ```powershell
 # 改完 prefab 后执行
-node .\WxOpenDataContext\scripts\sync-prefab-layout.js
+node .\WxOpenDataContext\scripts\prefab-to-style.js
 # 或
 .\WxOpenDataContext\scripts\sync-prefab-layout.ps1
 
@@ -33,12 +33,11 @@ npm install minigame-canvas-engine --prefix .\WxOpenDataContext\scripts
 .\WxOpenDataContext\scripts\deploy-to-wxprogrom.ps1 -TargetDir "E:\yourGame\openDataContext"
 ```
 
-`sync-prefab-layout.ps1` 会更新：
+`prefab-to-style.js` 会更新：
 
 | 自动生成区域 | 文件 |
 |-------------|------|
-| Layout 样式 | `scripts/openDataContext/render/style.js` |
-| 模板函数 | `scripts/openDataContext/render/tplfn.js` |
+| Layout 样式（静态对象） | `scripts/openDataContext/render/style.js` |
 
 ### 节点识别规则（无需写死每个名字）
 
@@ -84,12 +83,13 @@ index.js
 scripts/
   openDataContext/
     index.js                 # wx.onMessage + getFriendCloudStorage + Layout 渲染
+    weapp-adapter.js         # 微信小游戏 DOM/Canvas 适配层（deploy 时复制）
     render/
       style.js               # prefab 同步的 Layout 样式
       tplfn.js               # prefab 同步的模板函数
   libs/engine.js             # minigame-canvas-engine（deploy 时复制）
 assets/
-  prefab/UISocialInviteView.lh  # 设计源（仅 IDE 用）
+  prefab/UIGameRoomView.lh  # 设计源（仅 IDE 用）
   image/*.png
 src/
   Main.ts                    # IDE 占位脚本，开放域不依赖 bundle

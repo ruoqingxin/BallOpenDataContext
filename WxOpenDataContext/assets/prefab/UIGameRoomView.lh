@@ -3,15 +3,13 @@
   "_$id": "invite_root_001",
   "_$type": "GWidget",
   "name": "UIGameRoomView",
-  "width": 720,
-  "height": 1280,
+  "width": 350,
+  "height": 601,
   "_$child": [
     {
       "_$id": "d74o3i83",
       "_$type": "GList",
       "name": "list_items",
-      "x": 370,
-      "y": 479,
       "width": 350,
       "height": 601,
       "layout": {

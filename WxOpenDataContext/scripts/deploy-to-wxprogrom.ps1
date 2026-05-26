@@ -12,13 +12,16 @@ $srcImg = Join-Path $root "assets\image"
 
 if (-not (Test-Path $srcOd)) { throw "Missing source: $srcOd" }
 if (-not (Test-Path $srcEngine)) { throw "Missing engine: $srcEngine" }
+if (-not (Test-Path (Join-Path $srcOd "weapp-adapter.js"))) { throw "Missing weapp-adapter: $srcOd\weapp-adapter.js" }
 
 if (Test-Path $TargetDir) { Remove-Item $TargetDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir "render"), (Join-Path $TargetDir "image") | Out-Null
 
 Copy-Item (Join-Path $srcOd "index.js") $TargetDir -Force
+Copy-Item (Join-Path $srcOd "weapp-adapter.js") $TargetDir -Force
 Copy-Item (Join-Path $srcOd "render\style.js") (Join-Path $TargetDir "render\style.js") -Force
 Copy-Item (Join-Path $srcOd "render\tplfn.js") (Join-Path $TargetDir "render\tplfn.js") -Force
+Copy-Item (Join-Path $srcOd "render\assets.js") (Join-Path $TargetDir "render\assets.js") -Force
 Copy-Item $srcEngine (Join-Path $TargetDir "engine.js") -Force
 
 foreach ($name in @("icon_800000.png", "ui_btn_yellow.png", "ui_lt_dgx.png")) {

@@ -6,7 +6,7 @@ window.appConfig = {
     buildType: "wxgame",
     id: 1001,
     version: "1.0.1",
-    buildNumber: 598,
+    buildNumber: 609,
     url: "http://192.168.0.250:8081/res/pool2/dev",
     urlSub: "minigame",
     defines: "DEVELOP;",

@@ -1,21 +1,22 @@
 /**
  * Layout 样式 — 由 assets/prefab/UIGameRoomView.lh 转换
- * 标记 @prefab-sync-start … @prefab-sync-end 区块供 sync-prefab-layout.js 覆盖，请勿手改。
+ * 标记 @prefab-sync-start … @prefab-sync-end 区块供 prefab-to-style.js 覆盖，请勿手改。
  */
 // @prefab-sync-start
 module.exports = {
   container: {
-    width: 720,
-    height: 1280,
+    width: 350,
+    height: 601,
     position: "relative",
   },
   list_items: {
     position: "absolute",
-    left: 370,
-    top: 479,
+    left: 0,
+    top: 0,
     width: 350,
     height: 601,
     flexDirection: "column",
+    scrollY: true,
   },
   item: {
     width: 350,
@@ -58,10 +59,11 @@ module.exports = {
     height: 37,
     fontSize: 18,
     color: "#9e5621",
-    textAlign: "center",
     verticalAlign: "middle",
+    textAlign: "center",
     textOverflow: "ellipsis",
     textStrokeColor: "#373899",
+    textStrokeWidth: 1,
   },
   img_line: {
     position: "absolute",
@@ -72,14 +74,14 @@ module.exports = {
   },
   emptyText: {
     position: "absolute",
-    left: 370,
-    top: 479,
+    left: 0,
+    top: 0,
     width: 350,
     height: 601,
     fontSize: 24,
     color: "#999999",
     textAlign: "center",
     verticalAlign: "middle",
-  },
+  }
 };
 // @prefab-sync-end
