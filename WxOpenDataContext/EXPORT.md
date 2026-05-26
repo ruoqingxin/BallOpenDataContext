@@ -26,8 +26,11 @@ node .\WxOpenDataContext\scripts\sync-prefab-layout.js
 # 首次或升级 Layout 引擎
 npm install minigame-canvas-engine --prefix .\WxOpenDataContext\scripts
 
-# 部署到主工程（路径按小游戏根目录解析，需带 openDataContext/ 前缀）：
-# .\WxOpenDataContext\scripts\deploy-to-main.ps1 -TargetDir "E:\yourGame\openDataContext"
+# 部署到 WxProgrom 测试包（本项目默认路径）：
+.\WxOpenDataContext\scripts\deploy-to-wxprogrom.ps1
+
+# 部署到其它主工程小游戏根目录：
+.\WxOpenDataContext\scripts\deploy-to-wxprogrom.ps1 -TargetDir "E:\yourGame\openDataContext"
 ```
 
 `sync-prefab-layout.ps1` 会更新：
