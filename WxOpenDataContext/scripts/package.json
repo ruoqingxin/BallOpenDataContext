@@ -1,0 +1,8 @@
+{
+  "name": "wx-opendata-scripts",
+  "private": true,
+  "description": "Build scripts for Layout-based open data context",
+  "dependencies": {
+    "minigame-canvas-engine": "^1.0.29"
+  }
+}

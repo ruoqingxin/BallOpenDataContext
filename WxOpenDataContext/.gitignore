@@ -1,0 +1,11 @@
+.DS_Store
+temp
+library
+local
+release
+node_modules
+bin/js/bundles
+
+# Laya IDE 编译产物，源码以 .ts 为准
+src/**/*.js
+src/**/*.js.meta
