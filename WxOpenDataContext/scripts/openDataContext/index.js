@@ -1,10 +1,3 @@
-/**
- * 微信开放数据域入口 — Layout 标准方案
- * 设计源：assets/prefab/UIGameRoomView.lh
- * 文档：https://layaair.com/3.x/doc/IDE/uiEditor/uiComponent/OpenDataContextView/readme.html
- */
-require("./weapp-adapter.js");
-
 const style = require("./render/style.js");
 const tplFn = require("./render/tplfn.js");
 const localImages = require("./render/assets.js");
@@ -15,7 +8,6 @@ const sharedContext = sharedCanvas.getContext("2d");
 
 const MSG = {
   ShowInviteFriend: "od:showInviteFriend",
-  HideInviteFriend: "od:hideInviteFriend",
   UpdateViewPort: "updateViewPort",
   Close: "close",
 };
@@ -38,6 +30,7 @@ let imagesLoading = false;
 let imageLoadQueue = [];
 
 let currentViewPort = null;
+let drawToken = 0;
 
 /**
  * sharedCanvas 在不同环境下的本地资源路径兼容
@@ -99,15 +92,41 @@ function getLocalImages() {
 }
 
 /**
+ * 清空 sharedCanvas，避免切换残留
+ */
+function clearSharedCanvas() {
+  try {
+    sharedContext.clearRect(0, 0, sharedCanvas.width, sharedCanvas.height);
+  } catch (err) {
+    console.error("[OpenData] clearSharedCanvas failed:", err);
+  }
+}
+
+/**
+ * 清空 Layout + 画布
+ */
+function resetStage() {
+  try {
+    Layout.clear();
+  } catch (err) {
+    console.error("[OpenData] Layout.clear failed:", err);
+  }
+
+  clearSharedCanvas();
+}
+
+/**
  * 预加载开放域资源图
  */
 function ensureImagesLoaded(callback) {
   if (imagesReady) {
-    callback();
+    callback && callback();
     return;
   }
 
-  imageLoadQueue.push(callback);
+  if (typeof callback === "function") {
+    imageLoadQueue.push(callback);
+  }
 
   if (imagesLoading) {
     return;
@@ -125,7 +144,11 @@ function ensureImagesLoaded(callback) {
     imageLoadQueue.length = 0;
 
     for (let i = 0; i < queue.length; i++) {
-      queue[i]();
+      try {
+        queue[i] && queue[i]();
+      } catch (err) {
+        console.error("[OpenData] image load callback failed:", err);
+      }
     }
   };
 
@@ -150,7 +173,7 @@ function mapFriends(list) {
   const seen = new Set();
 
   for (let i = 0; i < list.length; i++) {
-    const item = list[i];
+    const item = list[i] || {};
     const openid = typeof item.openid === "string" ? item.openid.trim() : "";
 
     if (!openid || seen.has(openid)) {
@@ -200,7 +223,14 @@ function fillFriendsForTest(list, targetCount) {
  * 拉取微信好友列表
  */
 function loadFriends(done) {
-  if (loadingFriends || loadedFriends) {
+  if (loadingFriends) {
+    if (typeof done === "function") {
+      done();
+    }
+    return;
+  }
+
+  if (loadedFriends) {
     if (typeof done === "function") {
       done();
     }
@@ -300,45 +330,55 @@ function bindInviteEvents() {
   for (let i = 0; i < users.length; i++) {
     (function (index) {
       const user = users[index];
-      const elements = Layout.getElementsById("btn_" + index);
-      const btn = elements && elements[0];
+      const btnElements = Layout.getElementsById("btn_" + index);
+      const btn = btnElements && btnElements[0];
 
-      if (!btn || !user) {
-        return;
+      if (btn && user) {
+        btn.on("click", function () {
+          shareToFriend(user.openid);
+        });
       }
 
-      btn.on("click", function () {
-        shareToFriend(user.openid);
-      });
+      const txtElements = Layout.getElementsById("txt_" + index);
+      const txt = txtElements && txtElements[0];
+
+      if (txt && user) {
+        txt.on("click", function () {
+          shareToFriend(user.openid);
+        });
+      }
     })(i);
   }
 }
 
-/**
- * 当前布局使用的逻辑宽度（与 prefab 列表宽一致，默认 350）
- */
-function getLayoutWidth() {
-  const viewPortWidth = currentViewPort ? Number(currentViewPort.width) || 0 : 0;
-  return viewPortWidth > 0 ? viewPortWidth : 350;
-}
 
-/**
- * 当前布局使用的逻辑高度
- */
-function getLayoutHeight() {
-  const scaleX = getViewPortScaleX();
-  const viewPortHeight = currentViewPort ? Number(currentViewPort.height) || 0 : 0;
+function hideListScrollbar() {
+  try {
+    const elements = Layout.getElementsById("list_items");
+    const list = elements && elements[0];
+    if (!list) {
+      return;
+    }
 
-  if (viewPortHeight > 0 && scaleX > 0) {
-    return viewPortHeight / scaleX;
+    if (Layout.ticker && typeof Layout.ticker.next === "function") {
+      Layout.ticker.next(function () {
+        try {
+          if (list.vertivalScrollbar) {
+            list.vertivalScrollbar.hide();
+          }
+        } catch (err) {
+          console.error("[OpenData] hide scrollbar failed:", err);
+        }
+      });
+      return;
+    }
+
+    if (list.vertivalScrollbar) {
+      list.vertivalScrollbar.hide();
+    }
+  } catch (err) {
+    console.error("[OpenData] hideListScrollbar failed:", err);
   }
-
-  return Number(sharedCanvas.height) || 601;
-}
-
-function getViewPortScaleX() {
-  const viewPortWidth = currentViewPort ? Number(currentViewPort.width) || 0 : 0;
-  return viewPortWidth > 0 ? viewPortWidth / getLayoutWidth() : 1;
 }
 
 function hasValidViewPort() {
@@ -363,6 +403,24 @@ function getLayoutViewPort() {
 }
 
 /**
+ * 先画一个空白底，避免首次显示黑一下
+ */
+function drawPlaceholder() {
+  if (!hasValidViewPort()) {
+    return;
+  }
+
+  resetStage();
+
+  try {
+    sharedContext.fillStyle = "rgba(0, 0, 0, 0)";
+    sharedContext.fillRect(0, 0, sharedCanvas.width, sharedCanvas.height);
+  } catch (err) {
+    console.error("[OpenData] drawPlaceholder failed:", err);
+  }
+}
+
+/**
  * 正式绘制
  */
 function draw() {
@@ -372,20 +430,35 @@ function draw() {
 
   if (!hasValidViewPort()) {
     console.warn("[OpenData] draw skipped: invalid viewport", currentViewPort);
+    resetStage();
     return;
   }
 
+  const token = ++drawToken;
+
+  resetStage();
+
   ensureImagesLoaded(function () {
+    if (!visible || token !== drawToken) {
+      return;
+    }
+
     const template = tplFn({
       data: users,
       images: getLocalImages(),
       emptyText: "暂无可邀请的微信好友",
     });
 
-    Layout.clear();
-    Layout.init(template, style);
-    Layout.layout(sharedContext);
-    bindInviteEvents();
+    resetStage();
+
+    try {
+      Layout.init(template, style);
+      Layout.layout(sharedContext);
+      hideListScrollbar();
+      bindInviteEvents();
+    } catch (err) {
+      console.error("[OpenData] draw failed:", err);
+    }
   });
 }
 
@@ -402,7 +475,24 @@ function showInvite(message) {
   };
 
   visible = true;
-  loadFriends(draw);
+  drawToken++;
+
+  drawPlaceholder();
+
+  if (loadedFriends) {
+    draw();
+    return;
+  }
+
+  users = [];
+  draw();
+
+  loadFriends(function () {
+    if (!visible) {
+      return;
+    }
+    draw();
+  });
 }
 
 /**
@@ -410,19 +500,24 @@ function showInvite(message) {
  */
 function hideInvite() {
   visible = false;
-  Layout.clear();
+  drawToken++;
+  resetStage();
 }
 
 /**
  * 主消息入口
  */
 function init() {
+  ensureImagesLoaded(function () {
+    console.log("[OpenData] images preloaded");
+  });
+
   wx.onMessage(function (data) {
     if (!data || typeof data.type !== "string") {
       return;
     }
 
-    console.error("[OpenData] init", JSON.stringify(data));
+    console.error("[OpenData] onMessage", JSON.stringify(data));
 
     switch (data.type) {
       case MSG.UpdateViewPort:
@@ -434,10 +529,15 @@ function init() {
             height: Number(data.box.height) || 0,
           };
 
-          Layout.updateViewPort(getLayoutViewPort());
+          try {
+            Layout.updateViewPort(getLayoutViewPort());
+          } catch (err) {
+            console.error("[OpenData] updateViewPort failed:", err);
+          }
         }
 
         if (visible) {
+          resetStage();
           draw();
         }
         break;
@@ -445,8 +545,6 @@ function init() {
       case MSG.ShowInviteFriend:
         showInvite(data);
         break;
-
-      case MSG.HideInviteFriend:
       case MSG.Close:
         hideInvite();
         break;

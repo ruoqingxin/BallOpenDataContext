@@ -359,6 +359,36 @@ function bindInviteEvents() {
   }
 }
 
+
+function hideListScrollbar() {
+  try {
+    const elements = Layout.getElementsById("list_items");
+    const list = elements && elements[0];
+    if (!list) {
+      return;
+    }
+ 
+    if (Layout.ticker && typeof Layout.ticker.next === "function") {
+      Layout.ticker.next(function () {
+        try {
+          if (list.vertivalScrollbar) {
+            list.vertivalScrollbar.hide();
+          }
+        } catch (err) {
+          console.error("[OpenData] hide scrollbar failed:", err);
+        }
+      });
+      return;
+    }
+ 
+    if (list.vertivalScrollbar) {
+      list.vertivalScrollbar.hide();
+    }
+  } catch (err) {
+    console.error("[OpenData] hideListScrollbar failed:", err);
+  }
+}
+
 function hasValidViewPort() {
   return !!(
     currentViewPort &&
@@ -391,7 +421,7 @@ function drawPlaceholder() {
   resetStage();
 
   try {
-    sharedContext.fillStyle = "#ffffff";
+    sharedContext.fillStyle = "rgba(0, 0, 0, 0)";
     sharedContext.fillRect(0, 0, sharedCanvas.width, sharedCanvas.height);
   } catch (err) {
     console.error("[OpenData] drawPlaceholder failed:", err);
@@ -432,6 +462,7 @@ function draw() {
     try {
       Layout.init(template, style);
       Layout.layout(sharedContext);
+      hideListScrollbar();
       bindInviteEvents();
     } catch (err) {
       console.error("[OpenData] draw failed:", err);
