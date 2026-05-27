@@ -24,6 +24,7 @@ let users = [];
 let visible = false;
 let loadingFriends = false;
 let loadedFriends = false;
+let friendCallbacks = [];
 
 let imagesReady = false;
 let imagesLoading = false;
@@ -41,15 +42,15 @@ function resolveLocalImage(storedPath) {
   }
 
   const normalized = storedPath.replace(/^\.\//, "");
-  const shortPath =
-    normalized.indexOf("openDataContext/") === 0
-      ? normalized.slice("openDataContext/".length)
-      : normalized;
-
   const gameRootPath =
     normalized.indexOf("openDataContext/") === 0
       ? normalized
       : "openDataContext/" + normalized;
+
+  const shortPath =
+    normalized.indexOf("openDataContext/") === 0
+      ? normalized.slice("openDataContext/".length)
+      : normalized;
 
   const candidates = [
     shortPath,
@@ -65,17 +66,8 @@ function resolveLocalImage(storedPath) {
       try {
         fs.accessSync(candidates[i]);
         return gameRootPath;
-      } catch (err) {
-        // try next
-      }
+      } catch (err) { }
     }
-
-    console.warn(
-      "[OpenData] image not found:",
-      gameRootPath,
-      "tried:",
-      candidates.join(", ")
-    );
   }
 
   return gameRootPath;
@@ -195,45 +187,36 @@ function mapFriends(list) {
   return result;
 }
 
-function fillFriendsForTest(list, targetCount) {
-  if (!list.length || list.length >= targetCount) {
-    return list.slice(0, targetCount);
+function flushFriendCallbacks() {
+  const callbacks = friendCallbacks.slice();
+  friendCallbacks.length = 0;
+
+  for (let i = 0; i < callbacks.length; i++) {
+    try {
+      callbacks[i] && callbacks[i]();
+    } catch (err) {
+      console.error("[OpenData] friend callback failed:", err);
+    }
   }
-
-  const result = list.slice();
-  let index = 0;
-
-  while (result.length < targetCount) {
-    const source = list[index % list.length];
-    const copyIndex = Math.floor(index / list.length) + 1;
-
-    result.push(
-      Object.assign({}, source, {
-        openid: source.openid + "_test_" + copyIndex,
-      })
-    );
-
-    index++;
-  }
-
-  return result;
 }
 
 /**
  * 拉取微信好友列表
+ * 只保留真实数据：
+ * - wx.getFriendCloudStorage
+ * - wx.getPotentialFriendList
  */
 function loadFriends(done) {
-  if (loadingFriends) {
-    if (typeof done === "function") {
-      done();
-    }
-    return;
+  if (typeof done === "function") {
+    friendCallbacks.push(done);
   }
 
   if (loadedFriends) {
-    if (typeof done === "function") {
-      done();
-    }
+    flushFriendCallbacks();
+    return;
+  }
+
+  if (loadingFriends) {
     return;
   }
 
@@ -241,34 +224,22 @@ function loadFriends(done) {
 
   let cloudFriends = [];
   let potentialFriends = [];
-  let pending = 0;
-  let settled = false;
+  let finishedCount = 0;
+  const totalCount = typeof wx.getPotentialFriendList === "function" ? 2 : 1;
 
-  function finishSource() {
-    pending--;
+  function finish() {
+    finishedCount++;
 
-    if (pending > 0 || settled) {
+    if (finishedCount < totalCount) {
       return;
     }
 
-    settled = true;
-    users = fillFriendsForTest(
-      mapFriends(cloudFriends.concat(potentialFriends)),
-      10
-    );
+    users = mapFriends(cloudFriends.concat(potentialFriends));
     loadedFriends = true;
     loadingFriends = false;
-
-    if (typeof done === "function") {
-      done();
-    }
+    flushFriendCallbacks();
   }
 
-  function startSource() {
-    pending++;
-  }
-
-  startSource();
   wx.getFriendCloudStorage({
     keyList: ["kv_data"],
     success: function (res) {
@@ -277,11 +248,10 @@ function loadFriends(done) {
     fail: function (err) {
       console.error("[OpenData] getFriendCloudStorage failed:", err);
     },
-    complete: finishSource,
+    complete: finish,
   });
 
   if (typeof wx.getPotentialFriendList === "function") {
-    startSource();
     wx.getPotentialFriendList({
       success: function (res) {
         potentialFriends = Array.isArray(res && res.list) ? res.list : [];
@@ -289,7 +259,7 @@ function loadFriends(done) {
       fail: function (err) {
         console.error("[OpenData] getPotentialFriendList failed:", err);
       },
-      complete: finishSource,
+      complete: finish,
     });
   }
 }
@@ -350,7 +320,6 @@ function bindInviteEvents() {
     })(i);
   }
 }
-
 
 function hideListScrollbar() {
   try {
@@ -517,8 +486,6 @@ function init() {
       return;
     }
 
-    console.error("[OpenData] onMessage", JSON.stringify(data));
-
     switch (data.type) {
       case MSG.UpdateViewPort:
         if (data.box) {
@@ -545,6 +512,7 @@ function init() {
       case MSG.ShowInviteFriend:
         showInvite(data);
         break;
+
       case MSG.Close:
         hideInvite();
         break;
