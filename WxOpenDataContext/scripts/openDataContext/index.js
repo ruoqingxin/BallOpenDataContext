@@ -1,483 +1,53 @@
-const style = require("./render/style.js");
-const tplFn = require("./render/tplfn.js");
-const localImages = require("./render/assets.js");
-const Layout = require("./engine.js").default;
+const MSG = require("./constants/msg.js");
+const images = require("./core/images.js");
+const viewport = require("./core/viewport.js");
+const inviteFriend = require("./views/inviteFriend/index.js");
 
-const sharedCanvas = wx.getSharedCanvas();
-const sharedContext = sharedCanvas.getContext("2d");
+const views = [inviteFriend];
 
-const MSG = {
-  ShowInviteFriend: "od:showInviteFriend",
-  UpdateViewPort: "updateViewPort",
-  Close: "close",
-};
+const viewByMsg = {};
+for (let i = 0; i < views.length; i++) {
+  const view = views[i];
+  const types = view.msgTypes || [];
 
-let shareConfig = {
-  roomId: 0,
-  roomName: "",
-  shareTxt: "",
-  shareImageUrl: "",
-  shareImageUrlId: "",
-};
-
-let users = [];
-let visible = false;
-let loadingFriends = false;
-let loadedFriends = false;
-let friendCallbacks = [];
-
-let imagesReady = false;
-let imagesLoading = false;
-let imageLoadQueue = [];
-
-let currentViewPort = null;
-let drawToken = 0;
-
-/**
- * sharedCanvas 在不同环境下的本地资源路径兼容
- */
-function resolveLocalImage(storedPath) {
-  if (!storedPath || /^https?:\/\//i.test(storedPath)) {
-    return storedPath;
+  for (let j = 0; j < types.length; j++) {
+    viewByMsg[types[j]] = view;
   }
+}
 
-  const normalized = storedPath.replace(/^\.\//, "");
-  const gameRootPath =
-    normalized.indexOf("openDataContext/") === 0
-      ? normalized
-      : "openDataContext/" + normalized;
+let activeView = null;
 
-  const shortPath =
-    normalized.indexOf("openDataContext/") === 0
-      ? normalized.slice("openDataContext/".length)
-      : normalized;
+function collectAssets() {
+  const all = [];
 
-  const candidates = [
-    shortPath,
-    "./" + shortPath,
-    gameRootPath,
-    "./" + gameRootPath,
-  ];
-
-  if (typeof wx !== "undefined" && wx.getFileSystemManager) {
-    const fs = wx.getFileSystemManager();
-
-    for (let i = 0; i < candidates.length; i++) {
-      try {
-        fs.accessSync(candidates[i]);
-        return gameRootPath;
-      } catch (err) { }
+  for (let i = 0; i < views.length; i++) {
+    const list = views[i].assets;
+    if (Array.isArray(list)) {
+      all.push.apply(all, list);
     }
   }
 
-  return gameRootPath;
+  return all;
 }
 
-function getLocalImages() {
-  const images = {};
-  for (let i = 0; i < localImages.length; i++) {
-    const path = localImages[i];
-    const name = path.split("/").pop();
-    images[name] = resolveLocalImage(path);
+function showView(view, message) {
+  if (activeView && activeView !== view) {
+    activeView.hide();
   }
-  return images;
+
+  activeView = view;
+  view.show(message);
 }
 
-/**
- * 清空 sharedCanvas，避免切换残留
- */
-function clearSharedCanvas() {
-  try {
-    sharedContext.clearRect(0, 0, sharedCanvas.width, sharedCanvas.height);
-  } catch (err) {
-    console.error("[OpenData] clearSharedCanvas failed:", err);
+function hideActiveView() {
+  if (activeView) {
+    activeView.hide();
+    activeView = null;
   }
 }
 
-/**
- * 清空 Layout + 画布
- */
-function resetStage() {
-  try {
-    Layout.clear();
-  } catch (err) {
-    console.error("[OpenData] Layout.clear failed:", err);
-  }
-
-  clearSharedCanvas();
-}
-
-/**
- * 预加载开放域资源图
- */
-function ensureImagesLoaded(callback) {
-  if (imagesReady) {
-    callback && callback();
-    return;
-  }
-
-  if (typeof callback === "function") {
-    imageLoadQueue.push(callback);
-  }
-
-  if (imagesLoading) {
-    return;
-  }
-
-  imagesLoading = true;
-
-  const sources = localImages.map(resolveLocalImage);
-
-  const finish = function () {
-    imagesReady = true;
-    imagesLoading = false;
-
-    const queue = imageLoadQueue.slice();
-    imageLoadQueue.length = 0;
-
-    for (let i = 0; i < queue.length; i++) {
-      try {
-        queue[i] && queue[i]();
-      } catch (err) {
-        console.error("[OpenData] image load callback failed:", err);
-      }
-    }
-  };
-
-  if (typeof Layout.loadImgs === "function") {
-    Layout.loadImgs(sources)
-      .then(finish)
-      .catch(function (err) {
-        console.error("[OpenData] Layout.loadImgs failed:", err);
-        finish();
-      });
-    return;
-  }
-
-  finish();
-}
-
-/**
- * 过滤和整理微信好友数据
- */
-function mapFriends(list) {
-  const result = [];
-  const seen = new Set();
-
-  for (let i = 0; i < list.length; i++) {
-    const item = list[i] || {};
-    const openid = typeof item.openid === "string" ? item.openid.trim() : "";
-
-    if (!openid || seen.has(openid)) {
-      continue;
-    }
-
-    seen.add(openid);
-
-    const name = item.nickName || item.nickname;
-
-    result.push({
-      openid: openid,
-      nickName: typeof name === "string" && name.trim() ? name : "微信好友",
-      nickname: typeof name === "string" && name.trim() ? name : "微信好友",
-      avatarUrl: typeof item.avatarUrl === "string" ? item.avatarUrl : "",
-    });
-  }
-
-  return result;
-}
-
-function flushFriendCallbacks() {
-  const callbacks = friendCallbacks.slice();
-  friendCallbacks.length = 0;
-
-  for (let i = 0; i < callbacks.length; i++) {
-    try {
-      callbacks[i] && callbacks[i]();
-    } catch (err) {
-      console.error("[OpenData] friend callback failed:", err);
-    }
-  }
-}
-
-/**
- * 拉取微信好友列表
- * 只保留真实数据：
- * - wx.getFriendCloudStorage
- * - wx.getPotentialFriendList
- */
-function loadFriends(done) {
-  if (typeof done === "function") {
-    friendCallbacks.push(done);
-  }
-
-  if (loadedFriends) {
-    flushFriendCallbacks();
-    return;
-  }
-
-  if (loadingFriends) {
-    return;
-  }
-
-  loadingFriends = true;
-
-  let cloudFriends = [];
-  let potentialFriends = [];
-  let finishedCount = 0;
-  const totalCount = typeof wx.getPotentialFriendList === "function" ? 2 : 1;
-
-  function finish() {
-    finishedCount++;
-
-    if (finishedCount < totalCount) {
-      return;
-    }
-
-    users = mapFriends(cloudFriends.concat(potentialFriends));
-    loadedFriends = true;
-    loadingFriends = false;
-    flushFriendCallbacks();
-  }
-
-  wx.getFriendCloudStorage({
-    keyList: ["kv_data"],
-    success: function (res) {
-      cloudFriends = Array.isArray(res && res.data) ? res.data : [];
-    },
-    fail: function (err) {
-      console.error("[OpenData] getFriendCloudStorage failed:", err);
-    },
-    complete: finish,
-  });
-
-  if (typeof wx.getPotentialFriendList === "function") {
-    wx.getPotentialFriendList({
-      success: function (res) {
-        potentialFriends = Array.isArray(res && res.list) ? res.list : [];
-      },
-      fail: function (err) {
-        console.error("[OpenData] getPotentialFriendList failed:", err);
-      },
-      complete: finish,
-    });
-  }
-}
-
-/**
- * 发起分享邀请
- */
-function shareToFriend(openid) {
-  const query =
-    "room_id=" +
-    encodeURIComponent(String(shareConfig.roomId)) +
-    "&room_name=" +
-    encodeURIComponent(shareConfig.roomName) +
-    "&invite_openid=" +
-    encodeURIComponent(openid);
-
-  const payload = {
-    title: shareConfig.shareTxt,
-    imageUrl: shareConfig.shareImageUrl,
-    query: query,
-  };
-
-  if (typeof wx.shareMessageToFriend === "function") {
-    wx.shareMessageToFriend(Object.assign({}, payload, { openId: openid }));
-  } else if (typeof wx.shareAppMessage === "function") {
-    wx.shareAppMessage(
-      Object.assign({}, payload, {
-        imageUrlId: shareConfig.shareImageUrlId,
-      })
-    );
-  }
-}
-
-/**
- * 绑定按钮点击
- */
-function bindInviteEvents() {
-  for (let i = 0; i < users.length; i++) {
-    (function (index) {
-      const user = users[index];
-      const btnElements = Layout.getElementsById("btn_" + index);
-      const btn = btnElements && btnElements[0];
-
-      if (btn && user) {
-        btn.on("click", function () {
-          shareToFriend(user.openid);
-        });
-      }
-
-      const txtElements = Layout.getElementsById("txt_" + index);
-      const txt = txtElements && txtElements[0];
-
-      if (txt && user) {
-        txt.on("click", function () {
-          shareToFriend(user.openid);
-        });
-      }
-    })(i);
-  }
-}
-
-function hideListScrollbar() {
-  try {
-    const elements = Layout.getElementsById("list_items");
-    const list = elements && elements[0];
-    if (!list) {
-      return;
-    }
-
-    if (Layout.ticker && typeof Layout.ticker.next === "function") {
-      Layout.ticker.next(function () {
-        try {
-          if (list.vertivalScrollbar) {
-            list.vertivalScrollbar.hide();
-          }
-        } catch (err) {
-          console.error("[OpenData] hide scrollbar failed:", err);
-        }
-      });
-      return;
-    }
-
-    if (list.vertivalScrollbar) {
-      list.vertivalScrollbar.hide();
-    }
-  } catch (err) {
-    console.error("[OpenData] hideListScrollbar failed:", err);
-  }
-}
-
-function hasValidViewPort() {
-  return !!(
-    currentViewPort &&
-    Number(currentViewPort.width) > 0 &&
-    Number(currentViewPort.height) > 0
-  );
-}
-
-/**
- * Layout 在开放域内收到的是 sharedCanvas 本地触摸坐标。
- * 主域窗口的 x/y 只用于主域摆放开放域画布，不能再叠加到子域命中坐标。
- */
-function getLayoutViewPort() {
-  return {
-    x: currentViewPort ? Number(currentViewPort.x) || 0 : 0,
-    y: currentViewPort ? Number(currentViewPort.y) || 0 : 0,
-    width: currentViewPort ? Number(currentViewPort.width) || 0 : 0,
-    height: currentViewPort ? Number(currentViewPort.height) || 0 : 0,
-  };
-}
-
-/**
- * 先画一个空白底，避免首次显示黑一下
- */
-function drawPlaceholder() {
-  if (!hasValidViewPort()) {
-    return;
-  }
-
-  resetStage();
-
-  try {
-    sharedContext.fillStyle = "rgba(0, 0, 0, 0)";
-    sharedContext.fillRect(0, 0, sharedCanvas.width, sharedCanvas.height);
-  } catch (err) {
-    console.error("[OpenData] drawPlaceholder failed:", err);
-  }
-}
-
-/**
- * 正式绘制
- */
-function draw() {
-  if (!visible) {
-    return;
-  }
-
-  if (!hasValidViewPort()) {
-    console.warn("[OpenData] draw skipped: invalid viewport", currentViewPort);
-    resetStage();
-    return;
-  }
-
-  const token = ++drawToken;
-
-  resetStage();
-
-  ensureImagesLoaded(function () {
-    if (!visible || token !== drawToken) {
-      return;
-    }
-
-    const template = tplFn({
-      data: users,
-      images: getLocalImages(),
-      emptyText: "暂无可邀请的微信好友",
-    });
-
-    resetStage();
-
-    try {
-      Layout.init(template, style);
-      Layout.layout(sharedContext);
-      hideListScrollbar();
-      bindInviteEvents();
-    } catch (err) {
-      console.error("[OpenData] draw failed:", err);
-    }
-  });
-}
-
-/**
- * 展示邀请面板
- */
-function showInvite(message) {
-  shareConfig = {
-    roomId: Number(message.room_id) || 0,
-    roomName: String(message.room_name || message.nick || ""),
-    shareTxt: String(message.share_txt || ""),
-    shareImageUrl: String(message.share_image_url || ""),
-    shareImageUrlId: String(message.share_image_url_id || ""),
-  };
-
-  visible = true;
-  drawToken++;
-
-  drawPlaceholder();
-
-  if (loadedFriends) {
-    draw();
-    return;
-  }
-
-  users = [];
-  draw();
-
-  loadFriends(function () {
-    if (!visible) {
-      return;
-    }
-    draw();
-  });
-}
-
-/**
- * 隐藏邀请面板
- */
-function hideInvite() {
-  visible = false;
-  drawToken++;
-  resetStage();
-}
-
-/**
- * 主消息入口
- */
 function init() {
-  ensureImagesLoaded(function () {
+  images.ensureImagesLoaded(collectAssets(), function () {
     console.log("[OpenData] images preloaded");
   });
 
@@ -488,37 +58,24 @@ function init() {
 
     switch (data.type) {
       case MSG.UpdateViewPort:
-        if (data.box) {
-          currentViewPort = {
-            x: Number(data.box.x) || 0,
-            y: Number(data.box.y) || 0,
-            width: Number(data.box.width) || 0,
-            height: Number(data.box.height) || 0,
-          };
+        viewport.update(data.box);
 
-          try {
-            Layout.updateViewPort(getLayoutViewPort());
-          } catch (err) {
-            console.error("[OpenData] updateViewPort failed:", err);
-          }
+        if (activeView && activeView.isVisible && activeView.isVisible()) {
+          activeView.onViewportChange();
         }
-
-        if (visible) {
-          resetStage();
-          draw();
-        }
-        break;
-
-      case MSG.ShowInviteFriend:
-        showInvite(data);
         break;
 
       case MSG.Close:
-        hideInvite();
+        hideActiveView();
         break;
 
-      default:
+      default: {
+        const view = viewByMsg[data.type];
+        if (view) {
+          showView(view, data);
+        }
         break;
+      }
     }
   });
 }

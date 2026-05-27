@@ -26,7 +26,10 @@ const prefabPath = getArg(
 );
 const stylePath = getArg(
   "--out",
-  path.join(projectRoot, "scripts/openDataContext/render/style.js")
+  path.join(
+    projectRoot,
+    "scripts/openDataContext/views/inviteFriend/render/style.js"
+  )
 );
 
 const MARK_START = "// @prefab-sync-start";
